@@ -1,0 +1,112 @@
+
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: bridgeflow-backend:latest
+    container_name: bridgeflow-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-to-64-characters-minimum-please-1234567890}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bridgeflow
+      SPRING_DATASOURCE_USERNAME: bridgeflow
+      SPRING_DATASOURCE_PASSWORD: bridgeflow123
+      SPRING_RABBITMQ_HOST: rabbitmq
+      # SPRING_RABBITMQ_PORT: 5672
+      # SPRING_RABBITMQ_USERNAME: guest
+      # SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - bridgeflow-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  email-service:
+    build:
+      context: ./email-service
+      dockerfile: Dockerfile
+    image: bridgeflow-email-service:latest
+    container_name: bridgeflow-email-service
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bridgeflow
+      POSTGRES_USER: bridgeflow
+      POSTGRES_PASSWORD: bridgeflow123
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USERNAME: ortizpassos@gmail.com
+      SMTP_PASSWORD: qygyacyixniadlgg
+      MAIL_FROM: "Bridge Flow <ortizpassos@gmail.com>"
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - bridgeflow-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: bridgeflow-frontend:latest
+    container_name: bridgeflow-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - bridgeflow-net
+
+  db:
+    image: postgres:15
+    container_name: bridgeflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bridgeflow
+      POSTGRES_USER: bridgeflow
+      POSTGRES_PASSWORD: bridgeflow123
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - bridgeflow-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: bridgeflow-rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bridgeflow-net
+
+networks:
+  bridgeflow-net:
+    driver: bridge
+
+volumes:
+  db_data:
+  rabbitmq_data:
